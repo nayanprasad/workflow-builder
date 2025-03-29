@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getLocalStorageItem,
+  loadWorkflowState,
+  resetWorkflowState,
+  saveWorkflowState,
   setLocalStorageItem,
   WorkflowAction,
+  WorkflowState,
 } from "@/utils/workflow.ts";
 import { ACTION_TYPES } from "@/utils/actionTypes.ts";
 
@@ -25,17 +29,57 @@ const ActionExecutor = ({
     null,
   );
   const [isExecuting, setIsExecuting] = useState(false);
+  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
 
-  // Use a ref to always have access to the latest action index
+  const initialLoadRef = useRef(false);
+
   const currentActionIndexRef = useRef<number | null>(null);
+
+  // Initialize workflow state management (only called once)
+  const initializeWorkflowState = useCallback(() => {
+    if (initialLoadRef.current) return; // Skip if already initialized
+
+    try {
+      const state = loadWorkflowState();
+
+      if (state) {
+        // Generate completed steps array based on lastCompletedStep
+        const completed = Array.from(
+          { length: state.lastCompletedStep + 1 },
+          (_, i) => i,
+        );
+
+        setCompletedSteps(completed);
+        initialLoadRef.current = true;
+        return state;
+      }
+    } catch (error) {
+      console.error("Error initializing workflow state:", error);
+    }
+
+    initialLoadRef.current = true;
+    // Default state if nothing found or error
+    return {
+      lastCompletedStep: -1,
+      currentStep: 0,
+      isCompleted: false,
+    };
+  }, [loadWorkflowState]);
 
   // Keep the ref in sync with the state
   useEffect(() => {
     currentActionIndexRef.current = currentActionIndex;
   }, [currentActionIndex]);
 
+  // Load state on initial render - ONLY ONCE
+  useEffect(() => {
+    if (actions.length > 0 && !initialLoadRef.current) {
+      initializeWorkflowState();
+    }
+  }, [actions.length, initializeWorkflowState]);
+
   const executeWorkflowAction = useCallback(
-    async (action: WorkflowAction): Promise<boolean> => {
+    async (action: WorkflowAction, index: number): Promise<boolean> => {
       return new Promise((resolve) => {
         setTimeout(() => {
           let shouldContinue = true;
@@ -59,15 +103,13 @@ const ActionExecutor = ({
               break;
 
             case ACTION_TYPES.REFRESH_PAGE: {
-              // Use the ref to get the current index, not the closure value
-              const nextActionIndex =
-                currentActionIndexRef.current !== null
-                  ? currentActionIndexRef.current + 1
-                  : "";
-              setLocalStorageItem(
-                "next_workflow_action_index",
-                nextActionIndex.toString(),
-              );
+              const state: WorkflowState = {
+                lastCompletedStep: index,
+                currentStep: index + 1,
+                isCompleted: false,
+              };
+              saveWorkflowState(state);
+
               shouldContinue = false;
               window.location.reload();
               break;
@@ -105,21 +147,19 @@ const ActionExecutor = ({
               break;
 
             case ACTION_TYPES.CLOSE_WINDOW: {
-              const nextActionIndex =
-                currentActionIndexRef.current !== null
-                  ? currentActionIndexRef.current + 1
-                  : "";
-              setLocalStorageItem(
-                "next_workflow_action_index",
-                nextActionIndex.toString(),
-              );
+              const state: WorkflowState = {
+                lastCompletedStep: index,
+                currentStep: index + 1,
+                isCompleted: false,
+              };
+              saveWorkflowState(state);
+
               shouldContinue = false;
               window.close();
               break;
             }
 
             case ACTION_TYPES.PROMPT_AND_SHOW: {
-              // Prompt is synchronous - execution will pause until user responds
               if (onShowText) {
                 const userInput = prompt(
                   action.params.promptMessage || "Please enter a value:",
@@ -151,15 +191,40 @@ const ActionExecutor = ({
               console.warn(`Unknown action type: ${action.type}`);
           }
 
+          if (shouldContinue) {
+            if (!completedSteps.includes(index)) {
+              const newCompletedSteps = [...completedSteps, index];
+              setCompletedSteps(newCompletedSteps);
+
+              const state: WorkflowState = {
+                lastCompletedStep: index,
+                currentStep: index + 1,
+                isCompleted: index + 1 >= actions.length,
+              };
+              saveWorkflowState(state);
+            }
+          }
+
           resolve(shouldContinue);
-        }, 500); // Small delay between actions for better visual feedback
+        }, 500);
       });
     },
-    [buttonRef, onDisableButton, onShowImage, onShowText],
+    [
+      buttonRef,
+      onDisableButton,
+      onShowImage,
+      onShowText,
+      completedSteps,
+      actions.length,
+      saveWorkflowState,
+    ],
   );
 
   const executeActions = useCallback(
     async (startIndex: number) => {
+      // Don't execute if we're already doing so
+      if (isExecuting) return;
+
       setIsExecuting(true);
       let currentIndex = startIndex;
 
@@ -167,8 +232,17 @@ const ActionExecutor = ({
         setCurrentActionIndex(currentIndex);
         const action = actions[currentIndex];
 
+        // If this step has already been completed, skip it
+        if (completedSteps.includes(currentIndex)) {
+          currentIndex++;
+          continue;
+        }
+
         try {
-          const shouldContinue = await executeWorkflowAction(action);
+          const shouldContinue = await executeWorkflowAction(
+            action,
+            currentIndex,
+          );
 
           if (!shouldContinue) {
             // This action requested to stop the execution (like refresh or close)
@@ -183,42 +257,72 @@ const ActionExecutor = ({
       }
 
       if (currentIndex >= actions.length) {
+        // Workflow completed
         setIsExecuting(false);
         setCurrentActionIndex(null);
+
+        // Mark workflow as completed
+        const state: WorkflowState = {
+          lastCompletedStep: actions.length - 1,
+          currentStep: actions.length,
+          isCompleted: true,
+        };
+        saveWorkflowState(state);
       }
     },
-    [actions, executeWorkflowAction],
+    [
+      actions,
+      executeWorkflowAction,
+      completedSteps,
+      isExecuting,
+      saveWorkflowState,
+    ],
   );
 
-  // This is for refresh or close
   useEffect(() => {
-    const nextActionIndex = getLocalStorageItem("next_workflow_action_index");
+    if (actions.length > 0 && !isExecuting && initialLoadRef.current) {
+      const state = loadWorkflowState();
 
-    if (nextActionIndex && actions.length > 0) {
-      try {
-        const parsedIndex = parseInt(nextActionIndex, 10);
-        if (parsedIndex >= 0 && parsedIndex < actions.length) {
-          console.log("Resuming workflow from index:", parsedIndex);
-          setLocalStorageItem("next_workflow_action_index", "");
-          console.log("Continuing the workflow in ...")
-          setTimeout(() => {
-            executeActions(parsedIndex);
-          }, 100);
+      if (state && !state.isCompleted) {
+        const startFrom = state.currentStep;
+
+        if (startFrom >= 0 && startFrom < actions.length) {
+          console.log("Resuming workflow from step:", startFrom);
+
+          const timer = setTimeout(() => {
+            executeActions(startFrom);
+          }, 500);
+
+          return () => clearTimeout(timer);
         }
-      } catch (error) {
-        console.error("Error parsing saved workflow state:", error);
       }
     }
-  }, [actions, executeActions]);
+  }, [actions.length, isExecuting]);
 
   const startExecution = useCallback(
     (startIndex = 0) => {
+      setCompletedSteps([]);
+      resetWorkflowState();
       executeActions(startIndex);
     },
-    [executeActions],
+    [executeActions, resetWorkflowState],
   );
 
-  return { startExecution, isExecuting, currentActionIndex };
+  const resetWorkflow = useCallback(() => {
+    setCompletedSteps([]);
+    setCurrentActionIndex(null);
+    setIsExecuting(false);
+    resetWorkflowState();
+    initialLoadRef.current = false;
+  }, [resetWorkflowState]);
+
+  return {
+    startExecution,
+    isExecuting,
+    currentActionIndex,
+    completedSteps,
+    resetWorkflow,
+  };
 };
 
 export default ActionExecutor;

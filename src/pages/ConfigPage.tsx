@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import ActionForm from "../components/workflow/ActionForm";
 import ActionList from "../components/workflow/ActionList";
 import {
-  loadWorkflow,
+  loadWorkflow, resetWorkflowState,
   saveWorkflow,
   WorkflowAction,
   WorkflowConfig,
@@ -53,6 +53,7 @@ const ConfigPage = () => {
     };
 
     saveWorkflow(workflow);
+    resetWorkflowState()
     setSaved(true);
 
     setTimeout(() => {
