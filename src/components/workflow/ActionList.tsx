@@ -147,7 +147,7 @@ const ActionList = ({
                       {index + 1}
                     </div>
                     <div>
-                      <h3 className="font-medium text-slate-900 dark:text-slate-200">
+                      <h3 className="font-medium text-start text-slate-900 dark:text-slate-200">
                         {actionDef.label}
                       </h3>
                       <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
