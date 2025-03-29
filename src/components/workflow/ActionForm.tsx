@@ -33,7 +33,7 @@ const ActionForm = ({ onAddAction }: ActionFormProps) => {
 
   const handleActionTypeChange = (value: string) => {
     setSelectedActionType(value);
-    setActionParams({}); // Reset params when changing action type
+    setActionParams({});
   };
 
   const handleParamChange = (name: string, value: string) => {
@@ -45,37 +45,33 @@ const ActionForm = ({ onAddAction }: ActionFormProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Create a new action
     const newAction: WorkflowAction = {
       id: crypto.randomUUID(),
       type: selectedActionType,
       params: actionParams,
     };
-
     onAddAction(newAction);
-
-    // Reset form
     setActionParams({});
   };
 
-  // Get the selected action definition
   const selectedAction = ACTIONS_DEFINITIONS[selectedActionType];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Add New Action</CardTitle>
+    <Card className="shadow-md border-slate-200 dark:border-slate-700">
+      <CardHeader className="pb-3 border-b border-slate-200 dark:border-slate-700">
+        <CardTitle className="text-xl">Add New Action</CardTitle>
       </CardHeader>
       <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
+        <CardContent className="pt-6 space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="actionType">Action Type</Label>
+            <Label htmlFor="actionType" className="text-sm font-medium">
+              Action Type
+            </Label>
             <Select
               value={selectedActionType}
               onValueChange={handleActionTypeChange}
             >
-              <SelectTrigger id="actionType">
+              <SelectTrigger id="actionType" className="shadow-sm">
                 <SelectValue placeholder="Select an action" />
               </SelectTrigger>
               <SelectContent>
@@ -86,56 +82,82 @@ const ActionForm = ({ onAddAction }: ActionFormProps) => {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground mt-1">
               {selectedAction.description}
             </p>
           </div>
 
-          {/* Render parameter fields based on the selected action */}
-          {selectedAction.paramFields.map((field) => (
-            <div key={field.name} className="space-y-2">
-              <Label htmlFor={field.name}>
-                {field.label}{" "}
-                {field.required && <span className="text-destructive">*</span>}
-              </Label>
-              {field.type === "color" ? (
-                <div className="flex items-center space-x-2">
-                  <Input
-                    type="color"
-                    value={actionParams[field.name]?.toString() || "#000000"}
-                    onChange={(e) =>
-                      handleParamChange(field.name, e.target.value)
-                    }
-                    className="w-10 h-10 p-1"
-                  />
-                  <Input
-                    type="text"
-                    id={field.name}
-                    value={actionParams[field.name]?.toString() || ""}
-                    onChange={(e) =>
-                      handleParamChange(field.name, e.target.value)
-                    }
-                    placeholder={field.placeholder}
-                    required={field.required}
-                  />
-                </div>
-              ) : (
-                <Input
-                  type={field.type}
-                  id={field.name}
-                  value={actionParams[field.name]?.toString() || ""}
-                  onChange={(e) =>
-                    handleParamChange(field.name, e.target.value)
-                  }
-                  placeholder={field.placeholder}
-                  required={field.required}
-                />
-              )}
+          {selectedAction.paramFields.length > 0 && (
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-md border border-slate-200 dark:border-slate-700">
+              <h3 className="text-sm font-medium mb-3">Action Parameters</h3>
+              <div className="space-y-4">
+                {selectedAction.paramFields.map((field) => (
+                  <div key={field.name} className="space-y-2">
+                    <Label htmlFor={field.name} className="text-sm">
+                      {field.label}{" "}
+                      {field.required && (
+                        <span className="text-destructive">*</span>
+                      )}
+                    </Label>
+                    {field.type === "color" ? (
+                      <div className="flex items-center space-x-2">
+                        <Input
+                          type="color"
+                          value={
+                            actionParams[field.name]?.toString() || "#000000"
+                          }
+                          onChange={(e) =>
+                            handleParamChange(field.name, e.target.value)
+                          }
+                          className="w-10 h-10 p-1 shadow-sm"
+                        />
+                        <Input
+                          type="text"
+                          id={field.name}
+                          value={actionParams[field.name]?.toString() || ""}
+                          onChange={(e) =>
+                            handleParamChange(field.name, e.target.value)
+                          }
+                          placeholder={field.placeholder}
+                          required={field.required}
+                          className="shadow-sm"
+                        />
+                      </div>
+                    ) : (
+                      <Input
+                        type={field.type}
+                        id={field.name}
+                        value={actionParams[field.name]?.toString() || ""}
+                        onChange={(e) =>
+                          handleParamChange(field.name, e.target.value)
+                        }
+                        placeholder={field.placeholder}
+                        required={field.required}
+                        className="shadow-sm"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
+          )}
         </CardContent>
-        <CardFooter>
-          <Button type="submit" className="w-full">
+        <CardFooter className="border-t border-slate-200 dark:border-slate-700 pt-4">
+          <Button type="submit" className="w-full shadow-sm">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="mr-2"
+            >
+              <path d="M12 5v14M5 12h14"></path>
+            </svg>
             Add Action
           </Button>
         </CardFooter>
