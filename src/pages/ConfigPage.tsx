@@ -119,9 +119,7 @@ const ConfigPage = () => {
                   </div>
                   <div className="pt-2">
                     <div className="relative overflow-hidden rounded-md border border-slate-200 dark:border-slate-700 h-12 flex items-center justify-center bg-slate-50 dark:bg-slate-800">
-                      <Button
-                        className="pointer-events-none min-w-[120px]"
-                      >
+                      <Button className="pointer-events-none min-w-[120px]">
                         {buttonLabel || "Click Me!"}
                       </Button>
                     </div>

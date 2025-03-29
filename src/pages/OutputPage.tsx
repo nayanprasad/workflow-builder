@@ -4,6 +4,13 @@ import ActionExecutor from "../components/workflow/ActionExecutor";
 import { loadWorkflow } from "@/utils/workflow";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { CheckCircle2, Circle, Loader2 } from "lucide-react";
 
 const OutputPage = () => {
   const [buttonLabel, setButtonLabel] = useState("Click Me!");
@@ -12,29 +19,65 @@ const OutputPage = () => {
   const [displayImages, setDisplayImages] = useState<
     { url: string; alt?: string }[]
   >([]);
+  const [stepOutputs, setStepOutputs] = useState<{
+    [key: number]: { text?: string; image?: { url: string; alt?: string } };
+  }>({});
+  const [activeStep, setActiveStep] = useState<string>("");
   const buttonRef = useRef<HTMLButtonElement | null>(null);
 
   const workflow = loadWorkflow();
 
-  // Load button configuration on mount
   useEffect(() => {
     setButtonLabel(workflow.buttonLabel || "Click Me!");
   }, [workflow.buttonLabel]);
 
-  // Create action executor
-  const { startExecution, isExecuting } = ActionExecutor({
+  const { startExecution, isExecuting, currentActionIndex } = ActionExecutor({
     actions: workflow.actions,
     buttonRef,
     onDisableButton: () => setIsDisabled(true),
-    onShowText: (text) => setDisplayTexts((prev) => [...prev, text]),
-    onShowImage: (url, alt) =>
-      setDisplayImages((prev) => [...prev, { url, alt }]),
+    onShowText: (text) => {
+      setDisplayTexts((prev) => [...prev, text]);
+      if (currentActionIndex !== null) {
+        setStepOutputs((prev) => ({
+          ...prev,
+          [currentActionIndex]: { ...prev[currentActionIndex], text },
+        }));
+      }
+    },
+    onShowImage: (url, alt) => {
+      setDisplayImages((prev) => [...prev, { url, alt }]);
+      if (currentActionIndex !== null) {
+        setStepOutputs((prev) => ({
+          ...prev,
+          [currentActionIndex]: {
+            ...prev[currentActionIndex],
+            image: { url, alt },
+          },
+        }));
+      }
+    },
   });
+
+  // Update active step when currentActionIndex changes
+  useEffect(() => {
+    if (currentActionIndex !== null) {
+      setActiveStep(`step-${currentActionIndex}`);
+    }
+  }, [currentActionIndex]);
 
   const handleButtonClick = () => {
     setDisplayTexts([]);
     setDisplayImages([]);
+    setStepOutputs({});
+    setActiveStep("step-0");
     startExecution(0);
+  };
+
+  const getStepStatus = (index: number) => {
+    if (currentActionIndex === null) return "pending";
+    if (currentActionIndex === index) return "executing";
+    if (currentActionIndex > index) return "completed";
+    return "pending";
   };
 
   return (
@@ -92,50 +135,66 @@ const OutputPage = () => {
                     {buttonLabel}
                   </Button>
                 </div>
-                {isExecuting && (
-                  <p className="text-sm text-slate-500 dark:text-slate-400 animate-pulse">
-                    Executing workflow...
-                  </p>
-                )}
               </div>
 
-              {/* Display area for text outputs */}
-              {displayTexts.length > 0 && (
-                <div className="w-full space-y-3 border-t border-slate-200 dark:border-slate-700 pt-6">
-                  <h3 className="font-medium text-lg mb-3">Output:</h3>
-                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-                    {displayTexts.map((text, index) => (
-                      <div
-                        key={index}
-                        className="p-4 bg-slate-50 dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 shadow-sm"
-                      >
-                        {text}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Display area for images */}
-              {displayImages.length > 0 && (
-                <div className="w-full border-t border-slate-200 dark:border-slate-700 pt-6">
-                  <h3 className="font-medium text-lg mb-4">Images:</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    {displayImages.map((img, index) => (
-                      <div key={index} className="flex justify-center">
-                        <div className="overflow-hidden rounded-md border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800 p-2">
-                          <img
-                            src={img.url}
-                            alt={img.alt || "Workflow image"}
-                            className="max-w-full h-auto rounded-sm"
-                            style={{ maxHeight: "300px" }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Workflow Steps Accordion */}
+              <div className="w-full">
+                <Accordion
+                  type="single"
+                  collapsible
+                  className="w-full"
+                  value={activeStep}
+                  onValueChange={setActiveStep}
+                >
+                  {workflow.actions.map((action, index) => {
+                    const status = getStepStatus(index);
+                    return (
+                      <AccordionItem key={action.id} value={`step-${index}`}>
+                        <AccordionTrigger className="hover:no-underline">
+                          <div className="flex items-center gap-3">
+                            {status === "completed" && (
+                              <CheckCircle2 className="h-5 w-5 text-green-500" />
+                            )}
+                            {status === "executing" && (
+                              <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+                            )}
+                            {status === "pending" && (
+                              <Circle className="h-5 w-5 text-slate-400" />
+                            )}
+                            <span className="font-medium">
+                              Step {index + 1}: {action.type}
+                            </span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="space-y-4">
+                            {stepOutputs[index]?.text && (
+                              <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700">
+                                {stepOutputs[index].text}
+                              </div>
+                            )}
+                            {stepOutputs[index]?.image && (
+                              <div className="flex justify-center">
+                                <div className="overflow-hidden rounded-md border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800 p-2">
+                                  <img
+                                    src={stepOutputs[index].image.url}
+                                    alt={
+                                      stepOutputs[index].image.alt ||
+                                      "Step output"
+                                    }
+                                    className="max-w-full h-auto rounded-sm"
+                                    style={{ maxHeight: "300px" }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
+              </div>
             </div>
           </CardContent>
         </Card>

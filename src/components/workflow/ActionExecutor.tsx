@@ -218,7 +218,7 @@ const ActionExecutor = ({
     [executeActions],
   );
 
-  return { startExecution, isExecuting };
+  return { startExecution, isExecuting, currentActionIndex };
 };
 
 export default ActionExecutor;
